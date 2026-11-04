@@ -4,3 +4,9 @@ node_modules/
 next-env.d.ts
 *.tsbuildinfo
 .env
+
+# Private notes and working files, not part of the submission
+private/
+report/
+.claude/
+PROGRESS.txt
