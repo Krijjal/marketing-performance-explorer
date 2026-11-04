@@ -2,14 +2,18 @@ import Link from "next/link";
 import { getFilterOptions, parseFilters, toQueryString, type SearchParams } from "../analytics/filters";
 import { getKpis } from "../analytics/kpis";
 import { getChannelSummaries, getSpendByChannel, getWeeklyTrend } from "../analytics/trends";
-import { ApplyButton, CategoryFields, DateField, FILTER_FORM_CLASS } from "../components/Filters";
-import { formatDecimal, formatNumber, formatPercent } from "../components/format";
-import { KpiCard } from "../components/KpiCard";
+import { ApplyButton, CategoryFields, DateField, FILTER_FORM_CLASS, Phrase } from "../components/Filters";
+import { formatDecimal, formatNumber, formatPercent, pluralize } from "../components/format";
+import { Flowchart } from "../components/Flowchart";
+import { KpiCard, KpiLedger } from "../components/KpiCard";
 import { NoDataYet, Notice } from "../components/Notice";
 import { PageHeader } from "../components/PageHeader";
 import { Cell, HeaderCell, Table } from "../components/Table";
-import { RevenueChart, SpendByChannelChart, SpendChart } from "../components/TrendCharts";
+import { RevenueChart, SpendChart } from "../components/TrendCharts";
 import { getAppPool } from "../db/appPool";
+
+// Every page reads the database per request, so none of them can be prerendered at build time.
+export const dynamic = "force-dynamic";
 
 export default async function OverviewPage({
   searchParams,
@@ -37,9 +41,13 @@ export default async function OverviewPage({
       <PageHeader currentPath="/" title="Overview" query={query} />
 
       <form method="get" className={FILTER_FORM_CLASS}>
-        <DateField label="From" name="start" value={filters.startDate} options={options} />
-        <DateField label="To" name="end" value={filters.endDate} options={options} />
-        <CategoryFields filters={filters} options={options} />
+        <CategoryFields lead="Showing" filters={filters} options={options} />
+        <Phrase>
+          <span>from</span>
+          <DateField label="From" name="start" value={filters.startDate} options={options} />
+          <span>to</span>
+          <DateField label="To" name="end" value={filters.endDate} options={options} />
+        </Phrase>
         <ApplyButton />
       </form>
 
@@ -52,9 +60,9 @@ export default async function OverviewPage({
 
       {imputedTotal > 0 && (
         <Notice>
-          Imputed from neighbouring weeks in this view: {kpis.imputedSpendValues} media spend and{" "}
-          {kpis.imputedDistributionValues} distribution value
-          {imputedTotal === 1 ? "" : "s"}.{" "}
+          Imputed from neighbouring weeks in this view:{" "}
+          {pluralize(kpis.imputedSpendValues, "media spend value", "media spend values")} and{" "}
+          {pluralize(kpis.imputedDistributionValues, "distribution value", "distribution values")}.{" "}
           <Link href={`/data-quality?${query}`} className="underline">
             See the data quality report
           </Link>
@@ -62,7 +70,7 @@ export default async function OverviewPage({
         </Notice>
       )}
 
-      <section aria-label="Headline KPIs" className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+      <KpiLedger label="Headline KPIs" columns={6}>
         <KpiCard label="Revenue" value={formatNumber(kpis.revenue)} />
         <KpiCard label="Units sold" value={formatNumber(kpis.unitsSold)} />
         <KpiCard label="Media spend" value={formatNumber(kpis.mediaSpend)} imputedValues={kpis.imputedSpendValues} />
@@ -83,14 +91,14 @@ export default async function OverviewPage({
           value={formatPercent(kpis.ctr)}
           note={kpis.ctr === null ? "Digital channels only" : "Digital only"}
         />
-      </section>
+      </KpiLedger>
 
-      <section aria-label="Trends" className="grid gap-3 lg:grid-cols-2">
+      <Flowchart spend={spendByChannel} trend={weeklyTrend} />
+
+      <section aria-label="Trends" className="grid gap-8 lg:grid-cols-2">
         <RevenueChart points={weeklyTrend} />
         <SpendChart points={weeklyTrend} />
       </section>
-
-      <SpendByChannelChart points={spendByChannel} />
 
       <Table caption="Channel comparison">
         <thead>
@@ -119,7 +127,7 @@ export default async function OverviewPage({
 
       <a
         href={`/api/export?${query}`}
-        className="self-start rounded-md border border-line bg-surface px-4 py-2 text-sm font-medium hover:bg-line"
+        className="self-start rounded-md border border-accent px-4 py-2 text-sm font-semibold text-accent transition-colors hover:bg-accent hover:text-white"
       >
         Export this view as CSV
       </a>

@@ -1,6 +1,9 @@
 import type { FilterOptions, Filters } from "../analytics/filters";
 
-const FIELD_CLASS = "rounded-md border border-line bg-white px-3 py-2 text-sm";
+// The filters read as one sentence, so each control carries its own label for
+// screen readers and the words around it carry the meaning for everyone else.
+const FIELD_CLASS =
+  "rounded-md border border-line bg-surface px-2 py-1 font-semibold text-ink transition-colors hover:border-ink-soft";
 
 interface SelectFieldProps {
   label: string;
@@ -12,17 +15,14 @@ interface SelectFieldProps {
 
 function SelectField({ label, name, value, choices, allLabel }: SelectFieldProps) {
   return (
-    <label className="flex flex-col gap-1 text-xs font-medium text-ink-soft">
-      {label}
-      <select name={name} defaultValue={value ?? ""} className={FIELD_CLASS}>
-        <option value="">{allLabel}</option>
-        {choices.map((choice) => (
-          <option key={choice} value={choice}>
-            {choice}
-          </option>
-        ))}
-      </select>
-    </label>
+    <select name={name} defaultValue={value ?? ""} aria-label={label} className={FIELD_CLASS}>
+      <option value="">{allLabel}</option>
+      {choices.map((choice) => (
+        <option key={choice} value={choice}>
+          {choice}
+        </option>
+      ))}
+    </select>
   );
 }
 
@@ -35,37 +35,53 @@ interface DateFieldProps {
 
 export function DateField({ label, name, value, options }: DateFieldProps) {
   return (
-    <label className="flex flex-col gap-1 text-xs font-medium text-ink-soft">
-      {label}
-      <input
-        type="date"
-        name={name}
-        defaultValue={value}
-        min={options.firstWeek}
-        max={options.lastWeek}
-        className={FIELD_CLASS}
-      />
-    </label>
+    <input
+      type="date"
+      name={name}
+      aria-label={label}
+      defaultValue={value}
+      min={options.firstWeek}
+      max={options.lastWeek}
+      className={FIELD_CLASS}
+    />
   );
 }
 
-export function CategoryFields({ filters, options }: { filters: Filters; options: FilterOptions }) {
+// A phrase wraps as a unit, so the sentence breaks between phrases, not inside one.
+export function Phrase({ children }: { children: React.ReactNode }) {
+  return <span className="inline-flex flex-wrap items-center gap-x-2 gap-y-3">{children}</span>;
+}
+
+export function CategoryFields({
+  lead,
+  filters,
+  options,
+}: {
+  lead: string;
+  filters: Filters;
+  options: FilterOptions;
+}) {
   return (
-    <>
-      <SelectField label="Brand" name="brand" value={filters.brand} choices={options.brands} allLabel="All brands" />
-      <SelectField label="Market" name="market" value={filters.market} choices={options.markets} allLabel="All markets" />
-      <SelectField label="Channel" name="channel" value={filters.channel} choices={options.channels} allLabel="All channels" />
-    </>
+    <Phrase>
+      <span>{lead}</span>
+      <SelectField label="Brand" name="brand" value={filters.brand} choices={options.brands} allLabel="all brands" />
+      <span>in</span>
+      <SelectField label="Market" name="market" value={filters.market} choices={options.markets} allLabel="all markets" />
+      <span>across</span>
+      <SelectField label="Channel" name="channel" value={filters.channel} choices={options.channels} allLabel="all channels" />
+    </Phrase>
   );
 }
 
 export function ApplyButton() {
   return (
-    <button type="submit" className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-white">
+    <button
+      type="submit"
+      className="ml-1 rounded-md bg-accent px-4 py-1.5 text-base font-semibold text-white transition hover:bg-accent-strong active:scale-[0.98]"
+    >
       Apply
     </button>
   );
 }
 
-export const FILTER_FORM_CLASS =
-  "grid grid-cols-1 items-end gap-3 rounded-lg border border-line bg-surface p-4 sm:grid-cols-3 lg:grid-cols-6";
+export const FILTER_FORM_CLASS = "flex flex-wrap items-center gap-x-3 gap-y-3 text-lg text-ink-soft";
