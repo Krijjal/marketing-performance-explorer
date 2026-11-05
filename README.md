@@ -206,15 +206,3 @@ erDiagram
 
 More detail is in [docs/DECISIONS.md](docs/DECISIONS.md).
 
-## Next steps
-
-With more time, in this order:
-
-1. **Confirm the open data questions with the data owner:** the "Yes" promotion row, the currency, and the two estimated values.
-2. **Browser tests** for the main journeys with Playwright. The pipeline and SQL are covered by automated tests; the screens were checked by hand.
-3. **Login and roles,** using the company's existing sign in, as described in `docs/DECISIONS.md`.
-4. **Deployment:** learn the team's cloud setup, then deploy with a managed Postgres, secrets kept out of the code, and monitoring.
-5. **Uploading the weekly file from the browser,** so loading new data does not need the command line.
-6. **Brand and market comparison views** side by side.
-7. **Containerize the app,** so the whole stack starts with one command.
-8. **Modelling which channel drives which sales,** once there is at least a year of data.
