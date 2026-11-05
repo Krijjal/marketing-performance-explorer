@@ -13,9 +13,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className={grotesk.variable}>
-      <body className="font-sans antialiased">
-        <main className="mx-auto flex max-w-6xl flex-col gap-8 px-4 py-8 sm:px-6">{children}</main>
-      </body>
+      <body className="min-h-dvh font-sans antialiased">{children}</body>
     </html>
   );
 }

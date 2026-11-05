@@ -4,6 +4,8 @@ import { ChangeBadge, toneFor } from "./ChangeBadge";
 import { channelColour } from "./channelColours";
 import { formatNumber, formatWeek } from "./format";
 import { Legend, LegendItem } from "./Legend";
+import { Panel } from "./Panel";
+import { firstToLast } from "./series";
 
 // Slate rather than full ink, so the revenue row reads as a reference line and
 // does not outweigh the channels above it.
@@ -49,16 +51,6 @@ function shadeFor(value: number | null, values: (number | null)[]): number {
   return Math.round(LIGHTEST_SHADE + position * (100 - LIGHTEST_SHADE));
 }
 
-function firstToLast(values: (number | null)[]): number | null {
-  const known = values.filter((v): v is number => v !== null);
-  const first = known[0];
-  const last = known.at(-1);
-  if (first === undefined || last === undefined || known.length < 2 || first === 0) {
-    return null;
-  }
-  return (last - first) / first;
-}
-
 function KeyPill({ className, children }: { className: string; children: ReactNode }) {
   return <span className={`rounded-full px-1.5 text-[10px] leading-4 ${className}`}>{children}</span>;
 }
@@ -71,9 +63,9 @@ function ShadeCell({ value, shade, colour, week, isImputed }: {
   isImputed: boolean;
 }) {
   return (
-    <td className="border-b border-line px-px py-2 align-top">
+    <td className="border-b border-line px-px py-2.5 align-top">
       <div
-        className="burst h-8 rounded-sm"
+        className="burst h-8 rounded-[3px]"
         style={
           {
             "--week": week,
@@ -82,7 +74,7 @@ function ShadeCell({ value, shade, colour, week, isImputed }: {
           } as CSSProperties
         }
       />
-      <p className="mt-1 text-center text-xs text-ink-soft">
+      <p className="figures mt-1 text-center text-xs text-ink-soft">
         <span aria-hidden="true">{value === null ? "n/a" : formatShort(value)}</span>
         <span className="sr-only">
           {formatNumber(value)}
@@ -97,14 +89,14 @@ function SummaryCell({ row }: { row: FlowchartRow }) {
   const change = firstToLast(row.values);
   const total = row.values.reduce<number>((sum, value) => sum + (value ?? 0), 0);
   return (
-    <td className="border-b border-line py-2 pl-4 align-top">
+    <td className="border-b border-line py-2.5 pr-5 pl-4 align-top sm:pr-6">
       <ChangeBadge
         change={change}
         format="percent"
         tone={toneFor(change, row.higherIsBetter)}
         label={`${row.label}, first to last week`}
       />
-      <p className="mt-1 text-xs text-ink-soft">
+      <p className="figures mt-1 text-xs text-ink-soft">
         {formatShort(total)} total
         {row.shareOfSpend !== null && `, ${Math.round(row.shareOfSpend * 100)}% of spend`}
       </p>
@@ -149,7 +141,7 @@ export function Flowchart({ spend, trend }: { spend: ChannelWeekPoint[]; trend: 
 
   const renderRow = (row: FlowchartRow, className?: string) => (
     <tr key={row.label} className={className}>
-      <th scope="row" className="whitespace-nowrap border-b border-line py-2 pr-4 text-left align-top font-semibold">
+      <th scope="row" className="whitespace-nowrap border-b border-line py-2.5 pr-4 pl-5 text-left align-top font-semibold sm:pl-6">
         <span className="flex h-8 items-center gap-2">
           <span aria-hidden="true" className="size-2.5 rounded-sm" style={{ backgroundColor: row.colour }} />
           {row.label}
@@ -169,89 +161,90 @@ export function Flowchart({ spend, trend }: { spend: ChannelWeekPoint[]; trend: 
     </tr>
   );
 
-  return (
-    <section className="flex flex-col gap-2">
-      <div>
-        <h2 id="flowchart-title" className="text-lg font-bold">
-          Media flowchart
-        </h2>
-        <p id="flowchart-description" className="mt-0.5 max-w-3xl text-sm text-ink-soft">
-          Spend by channel each week, with revenue underneath. Shading shows when each row peaked,
-          not how big it is; the last column compares size.
-        </p>
-      </div>
-      <Legend label="How to read the flowchart">
-        <LegendItem
-          mark={
-            <span className="flex">
-              {KEY_SHADES.map((shade) => (
-                <span key={shade} className="h-3 w-3.5" style={{ backgroundColor: shadeOf(REVENUE_COLOUR, shade) }} />
-              ))}
-            </span>
-          }
-        >
-          Row&apos;s lowest week to its highest
-        </LegendItem>
-        {hasImputed && (
-          <LegendItem
-            mark={
-              <span
-                className="h-3 w-6 rounded-sm"
-                style={{ backgroundColor: shadeOf(REVENUE_COLOUR, 70), backgroundImage: HATCH }}
-              />
-            }
-          >
-            Includes an imputed value
-          </LegendItem>
-        )}
-        <LegendItem mark={<KeyPill className="bg-neutral-soft text-ink-soft">&#9650;</KeyPill>}>
-          Spend change, neither good nor bad
-        </LegendItem>
-        <LegendItem
-          mark={
-            <span className="flex gap-1">
-              <KeyPill className="bg-good-soft text-good">&#9650;</KeyPill>
-              <KeyPill className="bg-bad-soft text-bad">&#9660;</KeyPill>
-            </span>
-          }
-        >
-          Revenue rose or fell
-        </LegendItem>
-      </Legend>
-      <div className="relative overflow-x-auto border-t-2 border-ink">
-        <table
-          aria-labelledby="flowchart-title"
-          aria-describedby="flowchart-description"
-          className="w-full min-w-[760px] table-fixed text-sm"
-        >
-          <colgroup>
-            <col className="w-32" />
-            {weeks.map((week) => (
-              <col key={week} />
+  const legend = (
+    <Legend label="How to read the flowchart">
+      <LegendItem
+        mark={
+          <span className="flex">
+            {KEY_SHADES.map((shade) => (
+              <span key={shade} className="h-3 w-3.5" style={{ backgroundColor: shadeOf(REVENUE_COLOUR, shade) }} />
             ))}
-            <col className="w-44" />
-          </colgroup>
-          <thead>
-            <tr>
-              <th scope="col" className="border-b border-line py-2 text-left text-xs font-semibold text-ink-soft">
-                Week of
-              </th>
+          </span>
+        }
+      >
+        Row&apos;s lowest week to its highest
+      </LegendItem>
+      {hasImputed && (
+        <LegendItem
+          mark={
+            <span
+              className="h-3 w-6 rounded-sm"
+              style={{ backgroundColor: shadeOf(REVENUE_COLOUR, 70), backgroundImage: HATCH }}
+            />
+          }
+        >
+          Includes an imputed value
+        </LegendItem>
+      )}
+      <LegendItem mark={<KeyPill className="bg-neutral-soft text-ink-soft">&#9650;</KeyPill>}>
+        Spend change, neither good nor bad
+      </LegendItem>
+      <LegendItem
+        mark={
+          <span className="flex gap-1">
+            <KeyPill className="bg-good-soft text-good">&#9650;</KeyPill>
+            <KeyPill className="bg-bad-soft text-bad">&#9660;</KeyPill>
+          </span>
+        }
+      >
+        Revenue rose or fell
+      </LegendItem>
+    </Legend>
+  );
+
+  return (
+    <Panel
+      title="Media flowchart"
+      description="Spend by channel each week, with revenue underneath. Shading shows when each row peaked, not how big it is; the last column compares size."
+      legend={legend}
+      flush
+    >
+      {({ titleId, descriptionId }) => (
+        <div className="relative overflow-x-auto border-t border-line">
+          <table
+            aria-labelledby={titleId}
+            aria-describedby={descriptionId}
+            className="w-full min-w-[800px] table-fixed text-sm"
+          >
+            <colgroup>
+              <col className="w-36" />
               {weeks.map((week) => (
-                <th key={week} scope="col" className="border-b border-line py-2 text-center text-xs font-semibold text-ink-soft">
-                  {formatWeek(week)}
-                </th>
+                <col key={week} />
               ))}
-              <th scope="col" className="border-b border-line py-2 pl-4 text-left text-xs font-semibold text-ink-soft">
-                Change, {formatWeek(weeks[0]!)} to {formatWeek(weeks.at(-1)!)}
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {channelRows.map((row) => renderRow(row))}
-            {renderRow(revenueRow, "border-t-2 border-ink")}
-          </tbody>
-        </table>
-      </div>
-    </section>
+              <col className="w-48" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th scope="col" className="border-b border-line py-2 pl-5 text-left text-xs font-semibold text-ink-soft sm:pl-6">
+                  Week of
+                </th>
+                {weeks.map((week) => (
+                  <th key={week} scope="col" className="border-b border-line py-2 text-center text-xs font-semibold text-ink-soft">
+                    {formatWeek(week)}
+                  </th>
+                ))}
+                <th scope="col" className="border-b border-line py-2 pl-4 text-left text-xs font-semibold text-ink-soft">
+                  Change, {formatWeek(weeks[0]!)} to {formatWeek(weeks.at(-1)!)}
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {channelRows.map((row) => renderRow(row))}
+              {renderRow(revenueRow, "border-t-2 border-ink [&>*]:border-b-0")}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </Panel>
   );
 }

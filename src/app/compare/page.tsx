@@ -3,27 +3,21 @@ import {
   comparePeriods,
   getPeriodSummary,
   parseComparisonPeriods,
-  type DriverAlignment,
-  type DriverChange,
 } from "../../analytics/periodComparison";
+import { getWeeklyTrend } from "../../analytics/trends";
 import { ChangeBadge, driverTone, toneFor } from "../../components/ChangeBadge";
+import { DriverList, PairBars, PeriodTag } from "../../components/Comparison";
+import { ComparisonChart, type ChartPeriod } from "../../components/ComparisonChart";
 import { ApplyButton, CategoryFields, DateField, FILTER_FORM_CLASS, Phrase } from "../../components/Filters";
-import { formatDecimal, formatPercent } from "../../components/format";
+import { formatDate, formatDecimal, formatNumber, pluralize } from "../../components/format";
 import { KpiCard, KpiLedger } from "../../components/KpiCard";
-import { NoDataYet, Notice } from "../../components/Notice";
-import { PageHeader } from "../../components/PageHeader";
-import { Cell, HeaderCell, Table } from "../../components/Table";
+import { NoDataYet, Notice, NoticeStack } from "../../components/Notice";
+import { PageShell } from "../../components/PageHeader";
+import { Panel } from "../../components/Panel";
 import { getAppPool } from "../../db/appPool";
 
 // Every page reads the database per request, so none of them can be prerendered at build time.
 export const dynamic = "force-dynamic";
-
-const ALIGNMENT_TEXT: Record<DriverAlignment, string> = {
-  with: "Consistent with the revenue change",
-  against: "Runs against the revenue change",
-  flat: "No change",
-  unknown: "Cannot say",
-};
 
 // Media spend is neither good nor bad on its own, so its change stays neutral.
 const HIGHER_IS_BETTER: Record<string, boolean | null> = {
@@ -33,8 +27,9 @@ const HIGHER_IS_BETTER: Record<string, boolean | null> = {
   ROAS: true,
 };
 
-function formatDriverValue(driver: DriverChange, value: number | null): string {
-  return driver.unit === "percent" ? formatPercent(value) : formatDecimal(value);
+// Whole numbers for the weekly totals, two decimals for ROAS, where they matter.
+function formatMetric(label: string, value: number | null): string {
+  return label === "ROAS" ? formatDecimal(value) : formatNumber(value);
 }
 
 export default async function ComparePage({
@@ -51,37 +46,50 @@ export default async function ComparePage({
   const params = await searchParams;
   const filters = parseFilters(params, options);
   const { periodA, periodB } = parseComparisonPeriods(params, options);
-  const [summaryA, summaryB] = await Promise.all([
+  const chartStart = periodA.startDate < periodB.startDate ? periodA.startDate : periodB.startDate;
+  const chartEnd = periodA.endDate > periodB.endDate ? periodA.endDate : periodB.endDate;
+  const [summaryA, summaryB, weeklyTrend] = await Promise.all([
     getPeriodSummary(pool, periodA, filters),
     getPeriodSummary(pool, periodB, filters),
+    getWeeklyTrend(pool, { ...filters, startDate: chartStart, endDate: chartEnd }),
   ]);
   const { metrics, drivers } = comparePeriods(summaryA, summaryB);
-  const metricBadge = (metric: (typeof metrics)[number]) => (
-    <ChangeBadge
-      change={metric.percentChange}
-      format="percent"
-      tone={toneFor(metric.percentChange, HIGHER_IS_BETTER[metric.label] ?? null)}
-      label={metric.label}
-    />
-  );
-  const revenueChange = metrics[0]!.percentChange;
+  const revenue = metrics[0]!;
+  const revenueChange = revenue.percentChange;
   const imputedValues = summaryA.imputedValues + summaryB.imputedValues;
 
-  return (
-    <>
-      <PageHeader currentPath="/compare" title="Compare periods" query={toQueryString(filters)} />
+  // The chart shades the weeks actually in each period, so a range that starts
+  // mid-week still lines up with the points.
+  const chartPeriod = (startDate: string, endDate: string, revenuePerWeek: number | null): ChartPeriod | null => {
+    const inside = weeklyTrend.filter((week) => week.weekStart >= startDate && week.weekStart <= endDate);
+    return inside.length === 0
+      ? null
+      : { firstWeek: inside[0]!.weekStart, lastWeek: inside.at(-1)!.weekStart, revenuePerWeek };
+  };
 
+  const direction =
+    revenueChange === null ? null : revenueChange > 0 ? "rose" : revenueChange < 0 ? "fell" : "held steady";
+  const periodText = (period: typeof periodA) => `${formatDate(period.startDate)} to ${formatDate(period.endDate)}`;
+
+  return (
+    <PageShell
+      currentPath="/compare"
+      title="Compare periods"
+      query={toQueryString(filters)}
+      description="Two periods side by side, in values per week so periods of different lengths compare fairly, with the movements that usually drive revenue."
+    >
       <form method="get" className={FILTER_FORM_CLASS}>
         <input type="hidden" name="start" value={filters.startDate} />
         <input type="hidden" name="end" value={filters.endDate} />
         <Phrase>
-          <span>Compare</span>
+          <PeriodTag period="A" />
           <DateField label="Period A from" name="aStart" value={periodA.startDate} options={options} />
           <span>to</span>
           <DateField label="Period A to" name="aEnd" value={periodA.endDate} options={options} />
         </Phrase>
         <Phrase>
           <span>against</span>
+          <PeriodTag period="B" />
           <DateField label="Period B from" name="bStart" value={periodB.startDate} options={options} />
           <span>to</span>
           <DateField label="Period B to" name="bEnd" value={periodB.endDate} options={options} />
@@ -90,83 +98,79 @@ export default async function ComparePage({
         <ApplyButton />
       </form>
 
-      <Notice>
-        This compares movements side by side. It shows correlation, not causation: period A has{" "}
-        {summaryA.weeks} weeks of data and period B has {summaryB.weeks}, and these factors often
-        move together.
-      </Notice>
-
-      {imputedValues > 0 && (
+      <NoticeStack>
         <Notice>
-          These periods include {imputedValues} imputed value{imputedValues === 1 ? "" : "s"}.
+          This compares movements side by side. It shows correlation, not causation: period A has{" "}
+          {pluralize(summaryA.weeks, "week", "weeks")} of data and period B has {summaryB.weeks}, and these factors
+          often move together.
         </Notice>
-      )}
+        {imputedValues > 0 && (
+          <Notice>These periods include {pluralize(imputedValues, "imputed value", "imputed values")}.</Notice>
+        )}
+      </NoticeStack>
 
-      <KpiLedger label="Period B against period A" columns={4}>
-        {metrics.map((metric) => (
-          <KpiCard
-            key={metric.label}
-            label={metric.label}
-            value={formatDecimal(metric.periodB)}
-            change={metricBadge(metric)}
-            note={`Period A: ${formatDecimal(metric.periodA)}`}
-          />
-        ))}
-      </KpiLedger>
-
-      <Table caption="Performance (values per week, so periods of different lengths compare fairly)">
-        <thead>
-          <tr>
-            <HeaderCell>Metric</HeaderCell>
-            <HeaderCell>Period A</HeaderCell>
-            <HeaderCell>Period B</HeaderCell>
-            <HeaderCell>Change</HeaderCell>
-          </tr>
-        </thead>
-        <tbody>
+      <section aria-label="Headline" className="flex flex-col gap-6">
+        {direction && (
+          <p className="max-w-4xl text-2xl font-bold tracking-tight text-balance sm:text-3xl">
+            Revenue per week {direction}{" "}
+            <span className={revenueChange! > 0 ? "text-good" : revenueChange! < 0 ? "text-bad" : ""}>
+              {Math.abs(revenueChange! * 100).toFixed(1)}%
+            </span>
+            , from {formatNumber(revenue.periodA)} in period A to {formatNumber(revenue.periodB)} in period B.
+          </p>
+        )}
+        <KpiLedger label="Period B against period A" columns={4}>
           {metrics.map((metric) => (
-            <tr key={metric.label}>
-              <Cell>{metric.label}</Cell>
-              <Cell>{formatDecimal(metric.periodA)}</Cell>
-              <Cell>{formatDecimal(metric.periodB)}</Cell>
-              <Cell>{metricBadge(metric)}</Cell>
-            </tr>
-          ))}
-        </tbody>
-      </Table>
-
-      <Table
-        caption="Likely drivers of the revenue change"
-        description="Green changes normally help revenue and red ones normally hurt it. Each reading checks consistency with the revenue change; it is not a measured effect."
-      >
-        <thead>
-          <tr>
-            <HeaderCell>Driver</HeaderCell>
-            <HeaderCell>Period A</HeaderCell>
-            <HeaderCell>Period B</HeaderCell>
-            <HeaderCell>Change</HeaderCell>
-            <HeaderCell>Reading</HeaderCell>
-          </tr>
-        </thead>
-        <tbody>
-          {drivers.map((driver) => (
-            <tr key={driver.label}>
-              <Cell>{driver.label}</Cell>
-              <Cell>{formatDriverValue(driver, driver.periodA)}</Cell>
-              <Cell>{formatDriverValue(driver, driver.periodB)}</Cell>
-              <Cell>
-                <ChangeBadge
-                  change={driver.change}
-                  format={driver.unit === "percent" ? "points" : "number"}
-                  tone={driverTone(driver.alignment, revenueChange)}
-                  label={driver.label}
+            <KpiCard
+              key={metric.label}
+              label={metric.label}
+              value={formatMetric(metric.label, metric.periodB)}
+              change={
+                <>
+                  <ChangeBadge
+                    change={metric.percentChange}
+                    format="percent"
+                    tone={toneFor(metric.percentChange, HIGHER_IS_BETTER[metric.label] ?? null)}
+                    label={metric.label}
+                  />
+                  <span className="text-xs text-ink-soft">vs period A</span>
+                </>
+              }
+              chart={
+                <PairBars
+                  valueA={metric.periodA}
+                  valueB={metric.periodB}
+                  format={(value) => formatMetric(metric.label, value)}
                 />
-              </Cell>
-              <Cell>{ALIGNMENT_TEXT[driver.alignment]}</Cell>
-            </tr>
+              }
+            />
           ))}
-        </tbody>
-      </Table>
-    </>
+        </KpiLedger>
+      </section>
+
+      <Panel
+        title="Weekly revenue across both periods"
+        description={
+          <>
+            Period A runs {periodText(periodA)} and period B runs {periodText(periodB)}. Dashed lines mark each
+            period&apos;s revenue per week.
+          </>
+        }
+      >
+        <ComparisonChart
+          weeks={weeklyTrend.map((week) => ({ weekStart: week.weekStart, revenue: week.revenue }))}
+          periodA={chartPeriod(periodA.startDate, periodA.endDate, summaryA.revenuePerWeek)}
+          periodB={chartPeriod(periodB.startDate, periodB.endDate, summaryB.revenuePerWeek)}
+        />
+      </Panel>
+
+      <Panel
+        title="Likely drivers of the revenue change"
+        description="Bars show each driver's change relative to its period A value. Green changes normally help revenue and red ones normally hurt it. Each reading checks consistency with the revenue change; it is not a measured effect."
+        flush
+      >
+        <DriverList drivers={drivers} toneOf={(driver) => driverTone(driver.alignment, revenueChange)} />
+      </Panel>
+    </PageShell>
   );
 }

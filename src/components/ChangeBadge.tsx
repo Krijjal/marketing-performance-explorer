@@ -68,7 +68,11 @@ interface ChangeBadgeProps {
   label: string;
 }
 
-export function ChangeBadge({ change, format, tone, label }: ChangeBadgeProps) {
+export function ChangeBadge({ change: rawChange, format, tone: rawTone, label }: ChangeBadgeProps) {
+  // A change too small to show reads as flat, so "+0.0%" never wears a colour.
+  const isFlat = rawChange !== null && formatMagnitude(Math.abs(rawChange), format) === formatMagnitude(0, format);
+  const change = isFlat ? 0 : rawChange;
+  const tone = isFlat ? "neutral" : rawTone;
   const text = change === null ? "n/a" : formatChange(change, format);
   return (
     <span

@@ -33,6 +33,15 @@ export function formatWeek(isoDate: string): string {
   });
 }
 
+export function formatDate(isoDate: string): string {
+  return new Date(`${isoDate}T00:00:00Z`).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 // Chooses the word for one count, so "1 value" and "2 values" read correctly.
 export function pluralize(count: number, singular: string, plural: string): string {
   return `${count} ${count === 1 ? singular : plural}`;

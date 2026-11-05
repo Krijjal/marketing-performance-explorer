@@ -3,7 +3,7 @@ import type { FilterOptions, Filters } from "../analytics/filters";
 // The filters read as one sentence, so each control carries its own label for
 // screen readers and the words around it carry the meaning for everyone else.
 const FIELD_CLASS =
-  "rounded-md border border-line bg-surface px-2 py-1 font-semibold text-ink transition-colors hover:border-ink-soft";
+  "figures h-9 rounded-md border border-line-strong bg-surface px-2.5 font-semibold text-ink transition-colors hover:border-ink-soft";
 
 interface SelectFieldProps {
   label: string;
@@ -77,11 +77,12 @@ export function ApplyButton() {
   return (
     <button
       type="submit"
-      className="ml-1 rounded-md bg-accent px-4 py-1.5 text-base font-semibold text-white transition hover:bg-accent-strong active:scale-[0.98]"
+      className="h-9 rounded-md bg-accent px-5 font-semibold text-white shadow-sm shadow-accent/30 transition hover:bg-accent-strong active:scale-[0.98] sm:ml-auto"
     >
       Apply
     </button>
   );
 }
 
-export const FILTER_FORM_CLASS = "flex flex-wrap items-center gap-x-3 gap-y-3 text-lg text-ink-soft";
+export const FILTER_FORM_CLASS =
+  "flex flex-wrap items-center gap-x-3 gap-y-3 rounded-xl border border-line bg-surface px-5 py-4 text-base text-ink-soft sm:px-6";

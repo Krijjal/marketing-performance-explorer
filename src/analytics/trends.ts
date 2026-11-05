@@ -4,8 +4,13 @@ import type { Filters } from "./filters";
 export interface WeeklyTrendPoint {
   weekStart: string;
   revenue: number;
+  unitsSold: number;
   mediaSpend: number | null;
   spendIsImputed: boolean;
+  // Digital rows only, so a week's CPC and CTR never include TV.
+  digitalSpend: number | null;
+  clicks: number | null;
+  impressions: number | null;
 }
 
 export interface ChannelWeekPoint {
@@ -35,11 +40,15 @@ export async function getWeeklyTrend(pool: pg.Pool, filters: Filters): Promise<W
   const result = await pool.query<{
     week_start: string;
     revenue: number;
+    units_sold: number;
     media_spend: number | null;
     spend_is_imputed: boolean;
+    digital_spend: number | null;
+    clicks: number | null;
+    impressions: number | null;
   }>(
     `WITH business AS (
-       SELECT week_start, sum(revenue) AS revenue
+       SELECT week_start, sum(revenue) AS revenue, sum(units_sold) AS units_sold
        FROM v_business_weekly
        WHERE week_start BETWEEN $1::date AND $2::date
          AND ($3::text IS NULL OR brand = $3)
@@ -47,7 +56,13 @@ export async function getWeeklyTrend(pool: pg.Pool, filters: Filters): Promise<W
        GROUP BY week_start
      ),
      media AS (
-       SELECT week_start, sum(media_spend) AS media_spend, bool_or(spend_is_imputed) AS spend_is_imputed
+       SELECT
+         week_start,
+         sum(media_spend) AS media_spend,
+         bool_or(spend_is_imputed) AS spend_is_imputed,
+         sum(media_spend) FILTER (WHERE channel_type = 'digital') AS digital_spend,
+         sum(clicks) FILTER (WHERE channel_type = 'digital') AS clicks,
+         sum(impressions) FILTER (WHERE channel_type = 'digital') AS impressions
        FROM v_media_detail
        WHERE week_start BETWEEN $1::date AND $2::date
          AND ($3::text IS NULL OR brand = $3)
@@ -58,8 +73,12 @@ export async function getWeeklyTrend(pool: pg.Pool, filters: Filters): Promise<W
      SELECT
        business.week_start::text AS week_start,
        business.revenue::float8 AS revenue,
+       business.units_sold::float8 AS units_sold,
        media.media_spend::float8 AS media_spend,
-       COALESCE(media.spend_is_imputed, false) AS spend_is_imputed
+       COALESCE(media.spend_is_imputed, false) AS spend_is_imputed,
+       media.digital_spend::float8 AS digital_spend,
+       media.clicks::float8 AS clicks,
+       media.impressions::float8 AS impressions
      FROM business
      LEFT JOIN media ON media.week_start = business.week_start
      ORDER BY business.week_start`,
@@ -69,8 +88,12 @@ export async function getWeeklyTrend(pool: pg.Pool, filters: Filters): Promise<W
   return result.rows.map((row) => ({
     weekStart: row.week_start,
     revenue: row.revenue,
+    unitsSold: row.units_sold,
     mediaSpend: row.media_spend,
     spendIsImputed: row.spend_is_imputed,
+    digitalSpend: row.digital_spend,
+    clicks: row.clicks,
+    impressions: row.impressions,
   }));
 }
 
